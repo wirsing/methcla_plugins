@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <methcla/plugins/whitenoise.h>
+#include <methcla/plugins/brownnoise.h>
 
 #include <iostream>
 #include <oscpp/server.hpp>
@@ -23,16 +23,17 @@
 static const double kPi = 3.14159265358979323846264338327950288;
 
 typedef enum {
-    kWhiteNoise_amp,
-    kWhiteNoise_add,    
-    kWhiteNoise_output_0,
-    kWhiteNoisePorts
+    kBrownNoise_amp,
+    kBrownNoise_add,    
+    kBrownNoise_output_0,
+    kBrownNoisePorts
 } PortIndex;
 
 
 // Synth Struct, size of Synth ist dieses Struct
 typedef struct {
-    float* ports[kWhiteNoisePorts];
+    float noise;
+    float* ports[kBrownNoisePorts];
 } Synth;
 
 extern "C" {
@@ -43,13 +44,13 @@ port_descriptor( const Methcla_SynthOptions* /* options */
                , Methcla_PortDescriptor* port )
 {
     switch ((PortIndex)index) {
-        case kWhiteNoise_amp:
-        case kWhiteNoise_add:
+        case kBrownNoise_amp:
+        case kBrownNoise_add:
             port->type = kMethcla_ControlPort;
             port->direction = kMethcla_Input;
             port->flags = kMethcla_PortFlags;
             return true;
-        case kWhiteNoise_output_0:
+        case kBrownNoise_output_0:
             port->type = kMethcla_AudioPort;
             port->direction = kMethcla_Output;
             port->flags = kMethcla_PortFlags;
@@ -81,19 +82,21 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
 {
     Synth* self = (Synth*)synth;
 
-    const float amp = *self->ports[kWhiteNoise_amp];
-    const float add = *self->ports[kWhiteNoise_add];    
-    float* out = self->ports[kWhiteNoise_output_0];
+    const float amp = *self->ports[kBrownNoise_amp];
+    const float add = *self->ports[kBrownNoise_add];    
+    float* out = self->ports[kBrownNoise_output_0];
+    float noise = self->noise;
 
     for (size_t k = 0; k < numFrames; k++) {
-        /*
+        
         double r1 = (double) rand() / (double) RAND_MAX;
         double r2 = (double) rand() / (double) RAND_MAX;
-        out[k] = ((double) sqrt( -2.0f * log( r1 )) * cos( 2.0f * kPi * r2 )) * amp + add;
-        */
-
-        out[k] = rand() / RAND_MAX;
+        noise += ((double) sqrt( -2.0f * log( r1 )) * cos( 2.0f * kPi * r2 ))*0.125;
+        if (noise > 1.f) noise = 2.f - noise;
+        else if (noise < -1.f) noise = -2.f - noise;    
+        out[k] = noise * amp + add;
     }
+    self->noise = noise;
 }
 
 } // extern "C"
@@ -101,7 +104,7 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
 
 static const Methcla_SynthDef descriptor =
 {
-    METHCLA_PLUGINS_WHITE_NOISE_URI,
+    METHCLA_PLUGINS_BROWN_NOISE_URI,
     sizeof(Synth),
     0, 
     NULL,
@@ -115,7 +118,7 @@ static const Methcla_SynthDef descriptor =
 
 static const Methcla_Library library = { NULL, NULL };
 
-METHCLA_EXPORT const Methcla_Library* methcla_plugins_white_noise(const Methcla_Host* host, const char* /* bundlePath */)
+METHCLA_EXPORT const Methcla_Library* methcla_plugins_brown_noise(const Methcla_Host* host, const char* /* bundlePath */)
 {
     methcla_host_register_synthdef(host, &descriptor);
     return &library;
