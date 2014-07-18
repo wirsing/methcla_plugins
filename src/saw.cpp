@@ -22,9 +22,9 @@ typedef enum {
     kSaw_freq,
     kSaw_amp,
     kSaw_add,
-    kSaw_audio_freq,
-    kSaw_audio_amp,
-    kSaw_audio_add,
+    kSaw_input_0,
+    kSaw_input_1,
+    kSaw_input_2,
     kSaw_output_0,
     kSawPorts
 } PortIndex;
@@ -58,9 +58,9 @@ extern "C" {
                 port->direction = kMethcla_Output;
                 port->flags = kMethcla_PortFlags;
                 return true;
-            case kSaw_audio_freq:
-            case kSaw_audio_amp:
-            case kSaw_audio_add:
+            case kSaw_input_0:
+            case kSaw_input_1:
+            case kSaw_input_2:
                 port->type = kMethcla_AudioPort;
                 port->direction = kMethcla_Input;
                 port->flags = kMethcla_PortFlags;
@@ -101,9 +101,9 @@ extern "C" {
         
         float* out = self->ports[kSaw_output_0];
         
-        float* a_freq = self->ports[kSaw_audio_freq];
-        float* a_amp = self->ports[kSaw_audio_amp];
-        float* a_add = self->ports[kSaw_audio_add];
+        float* a_freq = self->ports[kSaw_input_0];
+        float* a_amp = self->ports[kSaw_input_1];
+        float* a_add = self->ports[kSaw_input_2];
         
         double phase = self->phase;
         double freqmul = self->freqmul;
