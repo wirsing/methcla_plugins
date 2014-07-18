@@ -86,13 +86,9 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
     float* out = self->ports[kWhiteNoise_output_0];
 
     for (size_t k = 0; k < numFrames; k++) {
-        /*
         double r1 = (double) rand() / (double) RAND_MAX;
         double r2 = (double) rand() / (double) RAND_MAX;
         out[k] = ((double) sqrt( -2.0f * log( r1 )) * cos( 2.0f * kPi * r2 )) * amp + add;
-        */
-
-        out[k] = rand() / RAND_MAX;
     }
 }
 

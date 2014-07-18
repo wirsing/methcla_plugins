@@ -18,31 +18,28 @@
 #include <oscpp/server.hpp>
 #include <unistd.h>
 #include <math.h>
-#include "revmodel.hpp"
+#include "freeverb/revmodel.hpp"
+
+revmodel model;
 
 typedef enum {
-    kDel_time,
-    kDel_fb,
-    kDel_input_0,
-    kDel_output_0,
-    kDelPorts
+    kReverb_room,
+    kReverb_damp,
+    kReverb_wet,
+    kReverb_dry,
+    kReverb_input_0,
+    kReverb_input_1,
+    kReverb_output_0,
+    kReverb_output_1,
+    kReverbPorts
 } PortIndex;
 
 
 // Synth Struct, size of Synth ist dieses Struct
 typedef struct 
 {
-    float* ports[kDelPorts];
-    float* delay;
-    int sampleRate;
-    float maxDelay;
-    int wp;
+    float* ports[kReverbPorts];
 } Synth;
-
-struct Options
-{
-    float maxDelay;
-};
 
 extern "C" {
 
@@ -52,18 +49,22 @@ port_descriptor( const Methcla_SynthOptions* /* options */
                , Methcla_PortDescriptor* port )
 {
     switch ((PortIndex)index) {
-        case kDel_time:
-        case kDel_fb:
+        case kReverb_room:
+        case kReverb_damp:
+        case kReverb_wet:
+        case kReverb_dry:
             port->type = kMethcla_ControlPort;
             port->direction = kMethcla_Input;
             port->flags = kMethcla_PortFlags;
             return true;
-        case kDel_output_0:
+        case kReverb_output_0:
+        case kReverb_output_1:        
             port->type = kMethcla_AudioPort;
             port->direction = kMethcla_Output;
             port->flags = kMethcla_PortFlags;
             return true;
-        case kDel_input_0:
+        case kReverb_input_0:
+        case kReverb_input_1:
             port->type = kMethcla_AudioPort;
             port->direction = kMethcla_Input;
             port->flags = kMethcla_PortFlags;
@@ -74,33 +75,12 @@ port_descriptor( const Methcla_SynthOptions* /* options */
 }
 
 static void
-configure(const void* tags, size_t tags_size, const void* args, size_t args_size, Methcla_SynthOptions* outOptions)
-{
-    OSCPP::Server::ArgStream argStream(OSCPP::ReadStream(tags, tags_size), OSCPP::ReadStream(args, args_size));
-    Options* options = (Options*)outOptions;
-    options->maxDelay = argStream.int32();       
-}
-
-static void
 construct( const Methcla_World* world
          , const Methcla_SynthDef* /* synthDef */
          , const Methcla_SynthOptions* inOptions
          , Methcla_Synth* synth )
 {
     Synth* self = (Synth*)synth;
-    Options* options = (Options*)inOptions;
-    self->sampleRate = methcla_world_samplerate(world); 
-    self->maxDelay = options->maxDelay;
-    self->wp = 0;
-    int maxSamples = ceil(self->maxDelay*self->sampleRate);
-
-    float* cDelay = new float[maxSamples];
-        
-    for (int i = 0; i < maxSamples; i++) {
-            cDelay[i] = 0;
-    }
-
-    self->delay = cDelay;
 }
 
 static void
@@ -117,58 +97,21 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
 {
     Synth* self = (Synth*)synth;
     
-    const float vdtime = *self->ports[kDel_time];
-    const float fb = *self->ports[kDel_fb];
-    float* in = self->ports[kDel_input_0];
-    float* out = self->ports[kDel_output_0];
-    float* delay = self->delay;
-    int wp = self->wp;
+    float* in_L = self->ports[kReverb_input_0];
+    float* in_R = self->ports[kReverb_input_1];
+    float* out_L = self->ports[kReverb_output_0];
+    float* out_R = self->ports[kReverb_output_1];
 
+    const float room = *self->ports[kReverb_room];
+    const float damp = *self->ports[kReverb_damp];
+    const float wet = *self->ports[kReverb_wet];
+    const float dry = *self->ports[kReverb_dry];
 
-    int mdt, rpi;
-    float rp, vdt, frac, next;
-
-    // calculate current delaytime in samples (float)
-    vdt = vdtime*self->sampleRate;
-
-    // calculate max delaytime in samples (int)
-    mdt = (int) (self->maxDelay*self->sampleRate);
-
-    // if current delay time > max then it gets truncated at max delaytime
-    if(vdt > mdt) vdt = (float) mdt;
-
-    // callback loop
-    for (size_t k = 0; k < numFrames; k++) {
-
-            // set read pointer to write pointer position - current delay time position
-            rp = wp-vdt;
-
-            // if read pointer equals or is greater than 0, then rp=rp if rp is lesser than maxdelaytime
-            // if rp is greater than maxdelaytime then rp = rp - max dt.
-            // if rp is lesser 0 then rp = rp + mdt;
-
-            rp = (rp >= 0 ? (rp < mdt ? rp : rp - mdt) : rp + mdt);
-            
-            // rpi is casted rp to integer
-            rpi = (int) rp;
-            
-            // calculate the error rest of the cast
-            frac = rp-rpi;
-            
-            // calculate sample if integer cast read pointer unequals max delaytime - 1 then take the following 
-            // sample of the read pointer. if not take sample 0 of delay buffer.
-            next = (rpi != mdt-1 ? delay[rpi+1] : delay[0]);
-            
-            // output sample at read buffer + rest of the next sample (linear interpolation)
-            out[k] = delay[rpi] + frac*(next - delay[rpi]);
-            
-            // copy the input to the delay buffer at index write pointer
-            delay[wp] = in[k] + out[k]*fb;
-                        
-            // advance the write pointer by one, if it's at max delaytime - 1 wrap around.
-            wp = (wp != mdt-1 ? wp+1 : 0);
-    }
-    self->wp = wp;
+    model.setroomsize(room);
+    model.setdamp(damp);
+    model.setwet(wet);
+    model.setdry(dry);
+    model.processreplace(in_L, in_R, out_L, out_R, numFrames, 1);
 }
 
 } // extern "C"
@@ -176,10 +119,10 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
 
 static const Methcla_SynthDef descriptor =
 {
-    METHCLA_PLUGINS_DELAY_URI,
+    METHCLA_PLUGINS_REVERB_URI,
     sizeof(Synth),
-    sizeof(Options), 
-    configure,
+    NULL, 
+    NULL,
     port_descriptor,
     construct,
     connect,
@@ -190,7 +133,7 @@ static const Methcla_SynthDef descriptor =
 
 static const Methcla_Library library = { NULL, NULL };
 
-METHCLA_EXPORT const Methcla_Library* methcla_plugins_delay(const Methcla_Host* host, const char* /* bundlePath */)
+METHCLA_EXPORT const Methcla_Library* methcla_plugins_reverb(const Methcla_Host* host, const char* /* bundlePath */)
 {
     methcla_host_register_synthdef(host, &descriptor);
     return &library;

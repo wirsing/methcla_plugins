@@ -89,12 +89,14 @@ construct( const Methcla_World* world
     Options* options = (Options*)inOptions;
     self->fftSize = options->fftSize*2;
     
-    self->fftCycles = (options->fftSize*2)/ methcla_world_block_size(world);
+    self->fftCycles = (self->fftSize)/ methcla_world_block_size(world);
     self->fftBuf = (float *)malloc(self->fftSize * sizeof(float));
     self->win = (float *)malloc(self->fftSize * sizeof(float));
     self->sigBuf = (float *)malloc(self->fftSize * sizeof(float));
     for (int i=0; i<(int)self->fftSize; i++) {
         self->win[i]=0.5*(1-cos((2.f*M_PI*i)/(self->fftSize-1)));
+        self->fftBuf[i]=0;
+        self->sigBuf[i]=0;
     }
     
     kNumItems = options->fftSize;
@@ -155,11 +157,14 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
         self->sigBuf[k + numFrames* (self->fftCurCycle-1) ] = in[k] * self->win[k + numFrames* (self->fftCurCycle-1)]; 
         out[k] = in[k];
     }
+    
+    //std::cout  << self->win[fftSize] << std::endl;
+
 
     self->fftCurCycle++;
 
     if(self->fftCurCycle == self->fftCycles){
-
+        
         ffft::FFTReal<float> fft(self->fftSize);
         float* value = (float*)methcla_world_alloc(world, kNumItems * sizeof(float));
         assert(value != nullptr); // TODO: error handling
@@ -172,7 +177,7 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
             //normalize and correct fft for hanning window
             value[i] =  (sqrt(pow(self->fftBuf[i],2) + pow(self->fftBuf[i + self->fftSize/2], 2))) / (self->fftSize*0.375);
         }
-
+        
         methcla_world_perform_command(world, get_fft, value);
         self->fftCurCycle=1;
     };

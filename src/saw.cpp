@@ -22,6 +22,9 @@ typedef enum {
     kSaw_freq,
     kSaw_amp,
     kSaw_add,
+    kSaw_audio_freq,
+    kSaw_audio_amp,
+    kSaw_audio_add,
     kSaw_output_0,
     kSawPorts
 } PortIndex;
@@ -36,74 +39,88 @@ typedef struct {
 } Synth;
 
 extern "C" {
-
-static bool
-port_descriptor( const Methcla_SynthOptions* /* options */
-               , Methcla_PortCount index
-               , Methcla_PortDescriptor* port )
-{
-    switch ((PortIndex)index) {
-        case kSaw_amp:
-        case kSaw_freq:
-        case kSaw_add:
-            port->type = kMethcla_ControlPort;
-            port->direction = kMethcla_Input;
-            port->flags = kMethcla_PortFlags;
-            return true;
-        case kSaw_output_0:
-            port->type = kMethcla_AudioPort;
-            port->direction = kMethcla_Output;
-            port->flags = kMethcla_PortFlags;
-            return true;
-        default:
-            return false;
+    
+    static bool
+    port_descriptor( const Methcla_SynthOptions* /* options */
+                    , Methcla_PortCount index
+                    , Methcla_PortDescriptor* port )
+    {
+        switch ((PortIndex)index) {
+            case kSaw_amp:
+            case kSaw_freq:
+            case kSaw_add:
+                port->type = kMethcla_ControlPort;
+                port->direction = kMethcla_Input;
+                port->flags = kMethcla_PortFlags;
+                return true;
+            case kSaw_output_0:
+                port->type = kMethcla_AudioPort;
+                port->direction = kMethcla_Output;
+                port->flags = kMethcla_PortFlags;
+                return true;
+            case kSaw_audio_freq:
+            case kSaw_audio_amp:
+            case kSaw_audio_add:
+                port->type = kMethcla_AudioPort;
+                port->direction = kMethcla_Input;
+                port->flags = kMethcla_PortFlags;
+                return true;
+            default:
+                return false;
+        }
     }
-}
-
-static void
-construct( const Methcla_World* world
-         , const Methcla_SynthDef* /* synthDef */
-         , const Methcla_SynthOptions* inOptions
-         , Methcla_Synth* synth )
-{
-    Synth* self = (Synth*)synth;
-    self->phase = 0.;
-    double samplerate = methcla_world_samplerate(world);
-    self->freqmul = 2.f/samplerate;
-}
-
-static void
-connect( Methcla_Synth* synth
-       , Methcla_PortCount index
-       , void* data )
-{
-    ((Synth*)synth)->ports[index] = (float*)data;
-}
-
-static void
-process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
-{
-    Synth* self = (Synth*)synth;
-
-    const float amp = *self->ports[kSaw_amp];
-    const float add = *self->ports[kSaw_add];    
-    const float freq = *self->ports[kSaw_freq];
-    float* out = self->ports[kSaw_output_0];
-    double phase = self->phase;
-    double freqmul = self->freqmul;
-
-    for (size_t k = 0; k < numFrames; k++) {
+    
+    static void
+    construct( const Methcla_World* world
+              , const Methcla_SynthDef* /* synthDef */
+              , const Methcla_SynthOptions* inOptions
+              , Methcla_Synth* synth )
+    {
+        Synth* self = (Synth*)synth;
+        self->phase = 0.;
+        double samplerate = methcla_world_samplerate(world);
+        self->freqmul = 2.f/samplerate;
+    }
+    
+    static void
+    connect( Methcla_Synth* synth
+            , Methcla_PortCount index
+            , void* data )
+    {
+        ((Synth*)synth)->ports[index] = (float*)data;
+    }
+    
+    static void
+    process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
+    {
+        Synth* self = (Synth*)synth;
         
-        float z = phase;
-        phase += freq * freqmul;
-        if (phase >= 1.f) phase -= 2.f;
-        else if (phase <= -1.f) phase += 2.f;
-        out[k] = amp * z + add;
-    }   
-
-    self->phase = phase;
-}
-
+        const float amp = *self->ports[kSaw_amp];
+        const float add = *self->ports[kSaw_add];
+        const float freq = *self->ports[kSaw_freq];
+        
+        float* out = self->ports[kSaw_output_0];
+        
+        float* a_freq = self->ports[kSaw_audio_freq];
+        float* a_amp = self->ports[kSaw_audio_amp];
+        float* a_add = self->ports[kSaw_audio_add];
+        
+        double phase = self->phase;
+        double freqmul = self->freqmul;
+        
+        for (size_t k = 0; k < numFrames; k++) {
+            
+            float z = phase;
+            phase += (freq + a_freq[k]) * freqmul;
+            if (phase >= 1.f) phase -= 2.f;
+            else if (phase <= -1.f) phase += 2.f;
+            //out[k] = (amp + a_amp[k]) * z + (add + a_add[k]);
+            out[k] = a_freq[k];
+        }
+        
+        self->phase = phase;
+    }
+    
 } // extern "C"
 
 
@@ -111,7 +128,7 @@ static const Methcla_SynthDef descriptor =
 {
     METHCLA_PLUGINS_SAW_URI,
     sizeof(Synth),
-    0, 
+    0,
     NULL,
     port_descriptor,
     construct,
