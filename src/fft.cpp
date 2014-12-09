@@ -23,6 +23,7 @@
 #include <vector>
 #include "ffft/FFTReal.h"
 
+static const double kPi = 3.14159265358979323846264338327950288;
 
 typedef enum {
     kFFT_input_0,
@@ -94,7 +95,7 @@ construct( const Methcla_World* world
     self->win = (float *)malloc(self->fftSize * sizeof(float));
     self->sigBuf = (float *)malloc(self->fftSize * sizeof(float));
     for (int i=0; i<(int)self->fftSize; i++) {
-        self->win[i]=0.5*(1-cos((2.f*M_PI*i)/(self->fftSize-1)));
+        self->win[i]=0.5*(1-cos((2.f*kPi*i)/(self->fftSize-1)));
         self->fftBuf[i]=0;
         self->sigBuf[i]=0;
     }
@@ -153,13 +154,39 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
     float* in = self->ports[kFFT_input_0];
     float* out = self->ports[kFFT_output_0];
 
-    for (size_t k = 0; k < numFrames; k++) {
-        self->sigBuf[k + numFrames* (self->fftCurCycle-1) ] = in[k] * self->win[k + numFrames* (self->fftCurCycle-1)]; 
-        out[k] = in[k];
+    if (kNumItems < numFrames){
+        for (size_t k = 0; k < kNumItems; k++) {
+            self->sigBuf[k] = in[k] * self->win[k];
+            out[k] = in[k];
+        }
+        
+        ffft::FFTReal<float> fft(self->fftSize);
+        float* value = (float*)methcla_world_alloc(world, kNumItems * sizeof(float));
+        assert(value != nullptr); // TODO: error handling
+        
+        //do fft
+        fft.do_fft(self->fftBuf, self->sigBuf);
+        
+        for (int i = 0; i < kNumItems; ++i)
+        {
+            //normalize and correct fft for hanning window
+            value[i] =  (sqrt(pow(self->fftBuf[i],2) + pow(self->fftBuf[i + self->fftSize/2], 2))) / ((self->fftSize/2)/2);
+        }
+        
+        methcla_world_perform_command(world, get_fft, value);
+        self->fftCurCycle=1;
+        
     }
     
+    else {
+        for (size_t k = 0; k < numFrames; k++) {
+            self->sigBuf[k + numFrames * (self->fftCurCycle-1) ] = in[k] * self->win[k + numFrames * (self->fftCurCycle-1)];
+            //self->sigBuf[k + numFrames* (self->fftCurCycle-1) ] = in[k];
+            out[k] = in[k];
+        }
+    }
+        
     //std::cout  << self->win[fftSize] << std::endl;
-
 
     self->fftCurCycle++;
 
@@ -175,7 +202,7 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
         for (int i = 0; i < kNumItems; ++i)
         {
             //normalize and correct fft for hanning window
-            value[i] =  (sqrt(pow(self->fftBuf[i],2) + pow(self->fftBuf[i + self->fftSize/2], 2))) / (self->fftSize*0.375);
+            value[i] =  (sqrt(pow(self->fftBuf[i],2) + pow(self->fftBuf[i + self->fftSize/2], 2))) / ((self->fftSize/2)/2);
         }
         
         methcla_world_perform_command(world, get_fft, value);

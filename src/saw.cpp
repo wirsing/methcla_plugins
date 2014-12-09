@@ -22,9 +22,6 @@ typedef enum {
     kSaw_freq,
     kSaw_amp,
     kSaw_add,
-    kSaw_input_0,
-    kSaw_input_1,
-    kSaw_input_2,
     kSaw_output_0,
     kSawPorts
 } PortIndex;
@@ -56,13 +53,6 @@ extern "C" {
             case kSaw_output_0:
                 port->type = kMethcla_AudioPort;
                 port->direction = kMethcla_Output;
-                port->flags = kMethcla_PortFlags;
-                return true;
-            case kSaw_input_0:
-            case kSaw_input_1:
-            case kSaw_input_2:
-                port->type = kMethcla_AudioPort;
-                port->direction = kMethcla_Input;
                 port->flags = kMethcla_PortFlags;
                 return true;
             default:
@@ -98,24 +88,17 @@ extern "C" {
         const float amp = *self->ports[kSaw_amp];
         const float add = *self->ports[kSaw_add];
         const float freq = *self->ports[kSaw_freq];
-        
         float* out = self->ports[kSaw_output_0];
-        
-        float* a_freq = self->ports[kSaw_input_0];
-        float* a_amp = self->ports[kSaw_input_1];
-        float* a_add = self->ports[kSaw_input_2];
-        
         double phase = self->phase;
         double freqmul = self->freqmul;
         
         for (size_t k = 0; k < numFrames; k++) {
             
             float z = phase;
-            phase += (freq + a_freq[k]) * freqmul;
+            phase += freq * freqmul;
             if (phase >= 1.f) phase -= 2.f;
             else if (phase <= -1.f) phase += 2.f;
-            //out[k] = (amp + a_amp[k]) * z + (add + a_add[k]);
-            out[k] = a_freq[k];
+            out[k] = amp * z + add;
         }
         
         self->phase = phase;

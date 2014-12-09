@@ -23,7 +23,7 @@
 
 typedef enum {
     kBPF_freq,
-    kBPF_res,
+    kBPF_bw,
     kBPF_input_0,
     kBPF_output_0,
     kBPFPorts
@@ -48,7 +48,7 @@ port_descriptor( const Methcla_SynthOptions* /* options */
 {
     switch ((PortIndex)index) {
         case kBPF_freq:
-        case kBPF_res:
+        case kBPF_bw:
             port->type = kMethcla_ControlPort;
             port->direction = kMethcla_Input;
             port->flags = kMethcla_PortFlags;
@@ -97,14 +97,25 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
     Synth* self = (Synth*)synth;
     
     const float freq = *self->ports[kBPF_freq];
-    const float r = *self->ports[kBPF_res];
+    const float bw = *self->ports[kBPF_bw];
     float* in = self->ports[kBPF_input_0];
     float* out = self->ports[kBPF_output_0];
     int sR = self->samplerate;
-    float n, w, a1, a2, a3, b1, b2;
+    float n, w, a0, a1, a2, b1, b2;
 
     for (size_t k = 0; k < numFrames; k++) {
         
+        w = 1.f / tan ((PI*bw)/sR);
+        
+        n = 2.f * cos ((2.f*PI*freq)/sR);
+        
+        a0 = 1.f / (1.f + w);
+        a1 = 0.f;
+        a2 = -1.f * a0;
+        b1 = -1.f * w * n * a0;
+        b2 = a0 * (w - 1.f);
+        
+        /*
         w = tan (PI*freq/sR);
 
         n = 1/(pow(w,2) + w/r + 1);
@@ -114,8 +125,9 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
         a3 = -a1;
         b1 = 2*n*(pow(w,2)-1);
         b2 = n*(pow(w,2) - w/r + 1);
-
-        out[k] = in[k]*a1 + self->del_in[0]*a2 + self->del_in[1]*a3 - self->del_out[0]*b1 - self->del_out[1]*b2;
+        */
+        
+        out[k] = self->del_in[0]*a1 + self->del_in[1]*a2 - self->del_out[0]*b1 - self->del_out[1]*b2;
 
         self->del_out[1] = self->del_out[0];
         self->del_out[0] = out[k];

@@ -23,7 +23,6 @@
 
 typedef enum {
     kLPF_freq,
-    kLPF_res,
     kLPF_input_0,
     kLPF_output_0,
     kLPFPorts
@@ -48,7 +47,6 @@ port_descriptor( const Methcla_SynthOptions* /* options */
 {
     switch ((PortIndex)index) {
         case kLPF_freq:
-        case kLPF_res:
             port->type = kMethcla_ControlPort;
             port->direction = kMethcla_Input;
             port->flags = kMethcla_PortFlags;
@@ -97,29 +95,31 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
     Synth* self = (Synth*)synth;
     
     const float freq = *self->ports[kLPF_freq];
-    const float r = *self->ports[kLPF_res];
     float* in = self->ports[kLPF_input_0];
     float* out = self->ports[kLPF_output_0];
     int sR = self->samplerate;
-    float n, w, a1, a2, a3, b1, b2;
+    float n, w, a0, a1, a2, b1, b2;
+
+    // 2nd Order Butterworth LowPass
 
     for (size_t k = 0; k < numFrames; k++) {
         
-        w = tan (PI*freq/sR);
+        w = 1 / (tan(PI*freq/sR));
 
-        n = 1/(pow(w,2) + w/r + 1);
+        n = pow(w,2);
 
-        a1 = n*pow(w,2);
-        a2 = 2*n;
-        a3 = n;
-        b1 = 2*n*(pow(w,2)-1);
-        b2 = n*(pow(w,2) - w/r + 1);
+        a0 = 1 / (2 + (2*w) + n);
+        a1 = 2*a0;
+        a2 = a0;
+        b1 = 2 * a0 * (1-n);
+        b2 = a0 * (1 - (2*w) + n); 
 
-        out[k] = in[k]*a1 + self->del_in[0]*a2 + self->del_in[1]*a3 - self->del_out[0]*b1 - self->del_out[1]*b2;
+        out[k] = in[k]*a0 + self->del_in[0]*a1 + self->del_in[1]*a2 - self->del_out[0]*b1 - self->del_out[1]*b2;
 
         self->del_out[1] = self->del_out[0];
         self->del_out[0] = out[k];
 
+        //needs check for denormalization
         self->del_in[1] = self->del_in[0];
         self->del_in[0] = in[k];
 
