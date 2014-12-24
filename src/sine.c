@@ -27,6 +27,7 @@ static const double kPi = 3.14159265358979323846264338327950288;
 typedef enum {
     kSine_freq,
     kSine_amp,
+    kSine_add,
     kSine_out,
     kSinePorts
 } PortIndex;
@@ -38,6 +39,7 @@ typedef struct {
 } Sine;
 
 static const Methcla_PortDescriptor kPortDescriptors[] = {
+    { .type = kMethcla_ControlPort, .direction = kMethcla_Input, .flags = kMethcla_PortFlags },
     { .type = kMethcla_ControlPort, .direction = kMethcla_Input, .flags = kMethcla_PortFlags },
     { .type = kMethcla_ControlPort, .direction = kMethcla_Input, .flags = kMethcla_PortFlags },
     { .type = kMethcla_AudioPort, .direction = kMethcla_Output, .flags = kMethcla_PortFlags }
@@ -88,12 +90,13 @@ process(const Methcla_World* world, Methcla_Synth* synth, size_t numFrames)
 
     const float freq      = *sine->ports[kSine_freq];
     const float amp       = *sine->ports[kSine_amp];
+    const float add       = *sine->ports[kSine_add];
     double phase          = sine->phase;
     const double phaseInc = freq * sine->freqToPhaseInc;
     float* const output   = sine->ports[kSine_out];
 
     for (size_t k = 0; k < numFrames; k++) {
-        output[k] = amp * sin(phase);
+        output[k] = amp * sin(phase) + add;
         phase += phaseInc;
     }
 
